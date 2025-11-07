@@ -1,13 +1,13 @@
 # MCP-Powered Browser Automation
 
-AI-driven browser automation using OpenAI and MCP (Model Context Protocol) Chrome DevTools server. The AI directly controls Chrome through MCP tools - pure AI-driven automation with no intermediate executors.
+AI-driven browser automation using Ollama (local LLM) and MCP (Model Context Protocol) Chrome DevTools server. The AI directly controls Chrome through MCP tools - pure AI-driven automation with no intermediate executors.
 
 ## Overview
 
-This project uses OpenAI to execute browser automation tasks by:
+This project uses Ollama (local LLM) to execute browser automation tasks by:
 1. Connecting to the `chrome-devtools-mcp` server
 2. Querying available MCP tools (navigate, click, fill, snapshot, wait, etc.)
-3. Converting MCP tools to OpenAI function calling format
+3. Converting MCP tools to function calling format
 4. Letting the AI decide which tools to call and in what order
 5. Executing tool calls through the MCP server
 6. Browser automation happens directly via Chrome DevTools Protocol
@@ -18,7 +18,7 @@ This project uses OpenAI to execute browser automation tasks by:
 
 1. **Java 17+** and **Maven 3.6+**
 2. **Node.js** and **npm** (for chrome-devtools-mcp)
-3. **OpenAI API Key**
+3. **Ollama** installed and running locally
 
 ### Install chrome-devtools-mcp
 
@@ -31,21 +31,41 @@ Verify installation:
 chrome-devtools-mcp --help
 ```
 
+### Install and Setup Ollama
+
+1. **Install Ollama**: Download from [https://ollama.ai](https://ollama.ai) and install
+2. **Start Ollama**: The Ollama service should be running (usually starts automatically)
+3. **Pull a model**: Download a model that supports function calling:
+   ```bash
+   ollama pull llama3.2
+   # or
+   ollama pull qwen2.5
+   # or
+   ollama pull mistral
+   ```
+
+Verify Ollama is running:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+**Note on Function Calling**: Ollama supports function calling through its OpenAI-compatible API endpoint (`/v1/chat/completions`). Make sure you're using a model that supports function calling (e.g., `llama3.2`, `qwen2.5`, `mistral`, or newer models).
+
 ## Configuration
 
 Create `secrets.properties` in the project root:
 
 ```properties
-openai.apiKey=sk-...
-openai.model=gpt-4o-mini
+ollama.model=llama3.2
+ollama.baseUrl=http://localhost:11434
 app.url=https://login.microsoftonline.com/
 crm.username=your-user@example.com
 crm.password=your-password
 ```
 
 **Environment variables** (alternative to secrets.properties):
-- `OPENAI_API_KEY` - OpenAI API key
-- `OPENAI_MODEL` - OpenAI model (default: gpt-4o-mini)
+- `OLLAMA_MODEL` - Ollama model name (default: llama3.2)
+- `OLLAMA_BASE_URL` - Ollama API base URL (default: http://localhost:11434)
 - `APP_URL` - Initial application URL
 - `CRM_USERNAME` - Username for login
 - `CRM_PASSWORD` - Password for login
@@ -61,7 +81,7 @@ mvn test -Dtest=PromptTests
 ### With Custom Configuration
 
 ```powershell
-mvn test -Dtest=PromptTests "-Dopenai.model=gpt-4o-mini" "-Denvfile=secrets.properties" "-Dlatency.budget.ms=180000"
+mvn test -Dtest=PromptTests "-Dollama.model=llama3.2" "-Denvfile=secrets.properties" "-Dlatency.budget.ms=180000"
 ```
 
 ### With Visible Browser
@@ -73,7 +93,7 @@ mvn test -Dtest=PromptTests "-Dbrowser.headless=false"
 ### Full Example
 
 ```powershell
-mvn test "-Dtest=PromptTests" "-Dopenai.model=gpt-4o-mini" "-Denvfile=secrets.properties" "-Dbrowser.headless=false" "-Dlatency.budget.ms=180000"
+mvn test "-Dtest=PromptTests" "-Dollama.model=llama3.2" "-Denvfile=secrets.properties" "-Dbrowser.headless=false" "-Dlatency.budget.ms=180000"
 ```
 
 ## Configuration Options
@@ -82,8 +102,8 @@ mvn test "-Dtest=PromptTests" "-Dopenai.model=gpt-4o-mini" "-Denvfile=secrets.pr
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `openai.apiKey` | OpenAI API key | `OPENAI_API_KEY` env var |
-| `openai.model` | OpenAI model to use | `gpt-4o-mini` |
+| `ollama.model` | Ollama model name | `llama3.2` |
+| `ollama.baseUrl` | Ollama API base URL | `http://localhost:11434` |
 | `app.url` | Initial application URL | `about:blank` |
 | `crm.username` | Username for login | `CRM_USERNAME` env var |
 | `crm.password` | Password for login | `CRM_PASSWORD` env var |
@@ -99,9 +119,9 @@ mvn test "-Dtest=PromptTests" "-Dopenai.model=gpt-4o-mini" "-Denvfile=secrets.pr
 1. **Test Setup**: `PromptTests` loads configuration from `secrets.properties` and creates a `PromptExecutorMcp` instance
 2. **MCP Connection**: `McpClient` starts the `chrome-devtools-mcp` server process via stdio
 3. **Tool Discovery**: Queries available MCP tools (navigate_page, take_snapshot, click, fill, wait_for, etc.)
-4. **Tool Conversion**: Converts MCP tool definitions to OpenAI function calling format
+4. **Tool Conversion**: Converts MCP tool definitions to function calling format (OpenAI-compatible)
 5. **AI Execution**: 
-   - Sends user prompt + available tools to OpenAI
+   - Sends user prompt + available tools to Ollama
    - AI decides which tools to call and in what order
    - Executes tool calls through MCP server
    - Receives results and continues conversation until task is complete
@@ -153,16 +173,30 @@ npm install -g chrome-devtools-mcp
 chrome-devtools-mcp --help
 ```
 
-### OpenAI API Key Not Configured
+### Ollama Not Running
 
-Set the API key in `secrets.properties` or as environment variable:
-```properties
-openai.apiKey=sk-...
+Ensure Ollama is installed and running:
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# If not running, start Ollama service
+# On macOS/Linux: ollama serve
+# On Windows: Start Ollama from Start Menu
 ```
 
-Or:
-```powershell
-$env:OPENAI_API_KEY="sk-..."
+### Model Not Found
+
+Pull the required model:
+```bash
+ollama pull llama3.2
+# or
+ollama pull qwen2.5
+```
+
+Verify model is available:
+```bash
+ollama list
 ```
 
 ### Tests Timeout
@@ -182,7 +216,7 @@ mvn test -Dtest=PromptTests "-Dbrowser.headless=false"
 ## Dependencies
 
 - **JUnit 5** - Testing framework
-- **RestAssured** - HTTP client for OpenAI API calls
+- **RestAssured** - HTTP client for Ollama API calls
 - **Jackson** - JSON processing
 - **Selenium** - Browser automation (used by MCP server, not directly by tests)
 

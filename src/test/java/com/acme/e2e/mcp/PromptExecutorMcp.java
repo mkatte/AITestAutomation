@@ -15,13 +15,13 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 
 /**
- * Uses OpenAI with MCP (Model Context Protocol) to execute browser automation.
+ * Uses Ollama (local LLM) with MCP (Model Context Protocol) to execute browser automation.
  * The AI directly controls Chrome through the MCP Chrome DevTools server.
  * No intermediate executor - pure AI-driven automation.
  */
 public final class PromptExecutorMcp implements PromptExecutor {
     private final ObjectMapper mapper;
-    private final String apiKey;
+    private final String ollamaBaseUrl;
     private final String model;
     private McpClient mcpClient;
     private ApiCallMetrics metrics;
@@ -29,11 +29,16 @@ public final class PromptExecutorMcp implements PromptExecutor {
     public PromptExecutorMcp() {
         this.mapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        this.apiKey = System.getProperty("openai.apiKey", System.getenv("OPENAI_API_KEY"));
-        if (this.apiKey == null || this.apiKey.isBlank()) {
-            throw new IllegalStateException("OpenAI API key not configured: set openai.apiKey or OPENAI_API_KEY");
-        }
-        this.model = System.getProperty("openai.model", "gpt-4o-mini");
+        // Ollama default URL is http://localhost:11434
+        this.ollamaBaseUrl = System.getProperty("ollama.baseUrl", 
+                System.getenv("OLLAMA_BASE_URL") != null ? System.getenv("OLLAMA_BASE_URL") : "http://localhost:11434");
+        // Default to a model that supports function calling (like llama3.2 or qwen2.5)
+        this.model = System.getProperty("ollama.model", 
+                System.getenv("OLLAMA_MODEL") != null ? System.getenv("OLLAMA_MODEL") : "llama3.2");
+        System.out.println("=== Ollama Configuration ===");
+        System.out.println("Ollama Base URL: " + this.ollamaBaseUrl);
+        System.out.println("Model: " + this.model);
+        System.out.println("============================");
     }
 
     @Override
@@ -110,7 +115,7 @@ public final class PromptExecutorMcp implements PromptExecutor {
             mcpTools.forEach(tool -> System.out.println("- " + tool.get("name")));
             System.out.println("===========================");
             
-            // Build tools in OpenAI function format
+            // Build tools in function calling format (Ollama supports OpenAI-compatible format)
             List<Map<String, Object>> tools = convertMcpToolsToOpenAiFormat(mcpTools);
             
             String systemMsg = String.join("\n",
@@ -207,40 +212,51 @@ public final class PromptExecutorMcp implements PromptExecutor {
                 body.put("model", model);
                 body.put("temperature", 0.1);
                 body.put("messages", messages);
-                body.put("tools", tools);
-                body.put("tool_choice", "auto");
+                // Ollama supports OpenAI-compatible function calling format
+                if (tools != null && !tools.isEmpty()) {
+                    body.put("tools", tools);
+                    body.put("tool_choice", "auto");
+                }
 
                 // Track API call start time
                 long apiCallStart = System.currentTimeMillis();
                 
+                // Use OpenAI-compatible endpoint for better function calling support
                 Response resp = RestAssured.given()
-                        .baseUri("https://api.openai.com")
+                        .baseUri(ollamaBaseUrl)
                         .basePath("/v1/chat/completions")
                         .contentType(ContentType.JSON)
-                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Authorization", "Bearer ollama") // Required by Ollama but not used
                         .body(body)
                         .post();
 
                 long apiCallDuration = System.currentTimeMillis() - apiCallStart;
 
                 if (resp.statusCode() / 100 != 2) {
-                    throw new IllegalStateException("OpenAI MCP call failed: status=" + resp.statusCode() + ", body=" + resp.asString());
+                    throw new IllegalStateException("Ollama MCP call failed: status=" + resp.statusCode() + ", body=" + resp.asString());
                 }
 
                 Map<?, ?> root = mapper.readValue(resp.asString(), Map.class);
                 
-                // Extract token usage from response
+                // Extract token usage from response (Ollama format might be different)
                 int promptTokens = 0;
                 int completionTokens = 0;
                 int totalTokens = 0;
                 Object usageObj = root.get("usage");
                 if (usageObj instanceof Map<?, ?> usage) {
+                    // Ollama might use different field names
                     Object pt = usage.get("prompt_tokens");
                     Object ct = usage.get("completion_tokens");
                     Object tt = usage.get("total_tokens");
+                    if (pt == null) pt = usage.get("prompt_eval_count"); // Ollama alternative
+                    if (ct == null) ct = usage.get("eval_count"); // Ollama alternative
                     if (pt instanceof Number) promptTokens = ((Number) pt).intValue();
                     if (ct instanceof Number) completionTokens = ((Number) ct).intValue();
-                    if (tt instanceof Number) totalTokens = ((Number) tt).intValue();
+                    if (tt instanceof Number) {
+                        totalTokens = ((Number) tt).intValue();
+                    } else if (promptTokens > 0 || completionTokens > 0) {
+                        totalTokens = promptTokens + completionTokens;
+                    }
                 }
                 
                 Map<String, Object> assistantMessage = extractAssistantMessage(root);
@@ -457,33 +473,59 @@ public final class PromptExecutorMcp implements PromptExecutor {
     }
     
     /**
-     * Extract assistant message from OpenAI response
+     * Extract assistant message from Ollama response
+     * Using OpenAI-compatible endpoint, so response format matches OpenAI: { "choices": [{ "message": {...} }] }
      */
     private Map<String, Object> extractAssistantMessage(Map<?, ?> root) {
         try {
+            // Try OpenAI-compatible format first (choices array)
             Object choices = root.get("choices");
-            if (!(choices instanceof List<?> cList) || cList.isEmpty()) return null;
-            Object first = cList.get(0);
-            if (!(first instanceof Map<?, ?> choiceMap)) return null;
-            Object message = choiceMap.get("message");
-            if (!(message instanceof Map<?, ?> msgMap)) return null;
-            
-            // Build a mutable copy of the message
-            Map<String, Object> assistantMsg = new HashMap<>();
-            assistantMsg.put("role", "assistant");
-            
-            Object content = msgMap.get("content");
-            if (content != null) {
-                assistantMsg.put("content", content);
+            if (choices instanceof List<?> cList && !cList.isEmpty()) {
+                Object first = cList.get(0);
+                if (first instanceof Map<?, ?> choiceMap) {
+                    Object msg = choiceMap.get("message");
+                    if (msg instanceof Map<?, ?> msgMap) {
+                        Map<String, Object> assistantMsg = new HashMap<>();
+                        assistantMsg.put("role", "assistant");
+                        
+                        Object content = msgMap.get("content");
+                        if (content != null) {
+                            assistantMsg.put("content", content);
+                        }
+                        
+                        Object toolCalls = msgMap.get("tool_calls");
+                        if (toolCalls != null) {
+                            assistantMsg.put("tool_calls", toolCalls);
+                        }
+                        
+                        return assistantMsg;
+                    }
+                }
             }
             
-            Object toolCalls = msgMap.get("tool_calls");
-            if (toolCalls != null) {
-                assistantMsg.put("tool_calls", toolCalls);
+            // Fallback: try native Ollama format (message directly)
+            Object message = root.get("message");
+            if (message instanceof Map<?, ?> msgMap) {
+                Map<String, Object> assistantMsg = new HashMap<>();
+                assistantMsg.put("role", "assistant");
+                
+                Object content = msgMap.get("content");
+                if (content != null) {
+                    assistantMsg.put("content", content);
+                }
+                
+                Object toolCalls = msgMap.get("tool_calls");
+                if (toolCalls != null) {
+                    assistantMsg.put("tool_calls", toolCalls);
+                }
+                
+                return assistantMsg;
             }
             
-            return assistantMsg;
+            return null;
         } catch (Exception e) {
+            System.err.println("Error extracting assistant message: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -502,7 +544,7 @@ public final class PromptExecutorMcp implements PromptExecutor {
     }
     
     /**
-     * Convert MCP tool definitions to OpenAI function calling format
+     * Convert MCP tool definitions to function calling format (OpenAI-compatible, works with Ollama)
      */
     private List<Map<String, Object>> convertMcpToolsToOpenAiFormat(List<Map<String, Object>> mcpTools) {
         List<Map<String, Object>> openAiTools = new ArrayList<>();
