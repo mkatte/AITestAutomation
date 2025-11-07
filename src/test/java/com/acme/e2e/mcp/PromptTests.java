@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -57,10 +58,16 @@ final class PromptTests {
     static Stream<String> prompts() {
         try {
             Path path = Paths.get("src", "test", "resources", "prompts.csv");
-            return Files.readAllLines(path)
+            var lines = Files.readAllLines(path)
                     .stream()
                     .map(String::trim)
-                    .filter(s -> !s.isBlank());
+                    .filter(s -> !s.isBlank())
+                    .collect(Collectors.toList());
+            if (lines.isEmpty()) {
+                return Stream.empty();
+            }
+            String joined = String.join("\n", lines);
+            return Stream.of(joined);
         } catch (Exception e) {
             return Stream.of(
                     "Summarize page",

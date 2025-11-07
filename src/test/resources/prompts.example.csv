@@ -1,0 +1,49 @@
+# Example Prompts for Browser Automation
+# Each line represents a step in a single test scenario
+# Steps are executed sequentially - one step must complete before the next begins
+
+# Example 1: Simple Login Flow
+Navigate to https://example.com/login
+Enter username testuser@example.com
+Enter password MyPassword123
+Click Sign in button
+Wait for dashboard page to load
+
+# Example 3: Form Filling
+Navigate to https://example.com/contact
+Enter name John Doe
+Enter email john.doe@example.com
+Enter message This is a test message
+Select dropdown option Support
+Click Submit button
+Wait for success message
+
+# Example 4: Multi-Step Navigation
+Navigate to https://example.com/products
+Click on category Electronics
+Wait for product list to load
+Click on first product
+Add product to cart
+Click checkout button
+Enter shipping address 123 Main St, City, State 12345
+Click Continue
+
+# Example 5: Search and Filter
+Navigate to https://example.com/search
+Enter search term laptop
+Click Search button
+Wait for results to load
+Select filter Brand: Dell
+Select filter Price Range: $500-$1000
+Click Apply Filters
+Wait for filtered results
+
+# Tips for Writing Prompts:
+# 1. Be specific about what to click (button text, element text, etc.)
+# 2. Use "Wait for" when the page needs time to load
+# 3. Include exact text values for inputs and buttons
+# 4. One action per line for clarity
+# 5. Use descriptive step names that explain what should happen
+# 6. For login flows, include both username and password steps
+# 7. For dynamic pages, wait for elements before interacting
+

@@ -39,9 +39,13 @@ chrome-devtools-mcp --help
    ```bash
    ollama pull llama3.2
    # or
+   ollama pull llama3.1
+   # or
    ollama pull qwen2.5
    # or
    ollama pull mistral
+   # or
+   ollama pull phi3
    ```
 
 Verify Ollama is running:
@@ -49,7 +53,11 @@ Verify Ollama is running:
 curl http://localhost:11434/api/tags
 ```
 
-**Note on Function Calling**: Ollama supports function calling through its OpenAI-compatible API endpoint (`/v1/chat/completions`). Make sure you're using a model that supports function calling (e.g., `llama3.2`, `qwen2.5`, `mistral`, or newer models).
+**⚠️ IMPORTANT - Function Calling Support**: 
+- **This code REQUIRES a model that supports function calling (tools)**
+- **Models that DO support function calling**: `llama3.2`, `llama3.1`, `qwen2.5`, `mistral`, `phi3`
+- **Models that DO NOT support function calling**: `tinyllama`, `llama2`, `codellama` (without function calling support)
+- If you use a model without function calling support, you'll get an error: "does not support tools"
 
 ## Configuration
 
@@ -61,6 +69,10 @@ ollama.baseUrl=http://localhost:11434
 app.url=https://login.microsoftonline.com/
 crm.username=your-user@example.com
 crm.password=your-password
+
+# Timeout configuration (optional - defaults shown)
+# mcp.defaultTimeoutMs=10000  # Default timeout: 10 seconds
+# mcp.minTimeoutMs=2000        # Minimum timeout: 2 seconds
 ```
 
 **Environment variables** (alternative to secrets.properties):
@@ -111,6 +123,8 @@ mvn test "-Dtest=PromptTests" "-Dollama.model=llama3.2" "-Denvfile=secrets.prope
 | `latency.budget.ms` | Maximum execution time per prompt | `300000` (5 minutes) |
 | `mcp.chrome.command` | MCP server command | `chrome-devtools-mcp` (or `chrome-devtools-mcp.cmd` on Windows) |
 | `mcp.chrome.args` | MCP server arguments | `--isolated` |
+| `mcp.defaultTimeoutMs` | Default timeout for tool calls when AI doesn't specify one | `10000` (10 seconds) |
+| `mcp.minTimeoutMs` | Minimum allowed timeout for tool calls | `2000` (2 seconds) |
 
 ## How It Works
 
@@ -162,6 +176,69 @@ Variables in prompts are automatically resolved:
 - `${app.url}` → replaced with `app.url` property
 - `${crm.username}` → replaced with `crm.username` property
 - `${crm.password}` → replaced with `crm.password` property
+
+## Writing Prompts
+
+The `prompts.csv` file contains your test scenarios. Each line represents a step in a single test, and all lines are executed sequentially as one complete workflow.
+
+### Prompt Format
+
+- **One step per line**: Each line is a single action or instruction
+- **Sequential execution**: Steps execute in order, one must complete before the next begins
+- **Be specific**: Use exact text values, button labels, and element descriptions
+- **Use "Wait for"**: When pages need time to load or elements appear dynamically
+
+### Example Prompts
+
+See `src/test/resources/prompts.example.csv` for detailed examples. Here are some common patterns:
+
+#### Simple Login Flow
+```
+Navigate to https://example.com/login
+Enter username testuser@example.com
+Enter password MyPassword123
+Click Sign in button
+Wait for dashboard page to load
+```
+
+#### Microsoft Dynamics 365 Login
+```
+Navigate to https://sitg.crm.dynamics.com/
+Enter Email AutomationUser28756487351@zones.com
+Wait for Next button and click Next
+Enter Password 24Zones4630$
+Wait for Sign in button and click Sign in
+Click Yes on stay signed in page
+On the SANDBOX page, click on div containing Zones Sales & Service
+Click on list item with text exactly matching Orders
+```
+
+#### Form Filling
+```
+Navigate to https://example.com/contact
+Enter name John Doe
+Enter email john.doe@example.com
+Enter message This is a test message
+Select dropdown option Support
+Click Submit button
+Wait for success message
+```
+
+### Best Practices
+
+1. **Be explicit**: "Click Sign in button" is better than "Click button"
+2. **Wait for elements**: "Wait for Next button and click Next" ensures the button exists
+3. **Use exact text**: Match button labels and field labels exactly as they appear
+4. **One action per line**: Keeps steps clear and debuggable
+5. **Include navigation**: Always start with "Navigate to [URL]"
+6. **Wait for page loads**: After navigation or clicks that change pages, wait for expected content
+
+### Tips
+
+- The AI will automatically take snapshots to find element UIDs
+- Use descriptive step names that explain what should happen
+- For dynamic pages, include "Wait for" steps before interactions
+- Test one scenario per CSV file, or use multiple CSV files for different scenarios
 
 ## Troubleshooting
 

@@ -1,1 +1,9 @@
-Feature: Create New Sales Order in Dynamics 365 with Entity and Shipping Details — Scenario: Create and validate a new sales order using flowing steps 1. Navigate to https://sitg.crm.dynamics.com  2. Enter user name ${CRM_USERNAME} and click Next 3. enter Password as ${CRM_PASSWORD} and click Sign in 4. Click "Yes" on stay signed in page 5. On the SANDBOX page and Click on div containg Zones Sales & Service 6. Click on list item with text exactly matching "Orders".
+Navigate to https://sitg.crm.dynamics.com/
+Enter Email AutomationUser28756487351@zones.com
+wait for "Next" button
+click "Next" button
+enter Password as 24Zones4630$
+wait for Sign in and click
+Click "Yes" on stay signed in page
+5. On the SANDBOX page and Click on div containg Zones Sales & Service
+6. Click on list item with text exactly matching "Orders".
