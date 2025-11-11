@@ -203,10 +203,10 @@ Wait for dashboard page to load
 
 #### Microsoft Dynamics 365 Login
 ```
-Navigate to https://sitg.crm.dynamics.com/
-Enter Email AutomationUser28756487351@zones.com
+Navigate to https://test.dynamics.com/
+Enter Email AutomationUser
 Wait for Next button and click Next
-Enter Password 24Zones4630$
+Enter Password password 
 Wait for Sign in button and click Sign in
 Click Yes on stay signed in page
 On the SANDBOX page, click on div containing Zones Sales & Service
