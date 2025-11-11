@@ -1,8 +1,8 @@
-Navigate to https://sitg.crm.dynamics.com/
-Enter Email AutomationUser28756487351@zones.com
+Navigate to https://test.dynamics.com/
+Enter Email AutomationUser
 wait for "Next" button
 click "Next" button
-enter Password as 24Zones4630$
+enter Password as password 
 wait for Sign in and click
 Click "Yes" on stay signed in page
 5. On the SANDBOX page and Click on div containg Zones Sales & Service
